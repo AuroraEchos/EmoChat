@@ -26,7 +26,7 @@ def handle_message(data):
     chatglm = ChatGLM()
     response = generate_emotional_reply(message, sentiment_analyzer, chatglm)
     
-    emit('response', {'msg': response}, broadcast=True)
+    emit('response', {'msg': response, 'username': session['username']}, broadcast=True)
 
 if __name__ == '__main__':
     server = pywsgi.WSGIServer(('127.0.0.1', 5000), app)

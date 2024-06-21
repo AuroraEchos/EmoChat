@@ -25,6 +25,13 @@
             <canvas id="my-canvas"> </canvas>
             <img src="/static/images/close.png" class="close-button" id="close-button">
         </div>
+        <div class="loading" id="loading">
+            <div class="spinner">
+                <div class="bounce1"></div>
+                <div class="bounce2"></div>
+                <div class="bounce3"></div>
+            </div>
+        </div>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
         <script src="{{ url_for('static', filename='js/crypto-js.min.js') }}"></script>
         <script src="{{ url_for('static', filename='js/xf-voice-dictation.js') }}"></script>
@@ -35,6 +42,10 @@
         <script>
             var socket = io();
             var isVoiceInput = false;
+
+            const username = "{{ username }}";
+
+            document.getElementById('loading').style.display = 'none';
 
             document.getElementById('messageInput').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
@@ -48,38 +59,51 @@
                     socket.emit('message', {msg: message});
 
                     e.target.value = '';
+
+                    showLoading();
                 }
             });
 
 
             socket.on('response', function(data) {
-                var node = document.createElement('div');
-                node.className = 'message other-message typing-animation';
-                document.getElementById('messages').appendChild(node);
-                
-                scrollToBottom();
+                hideLoading();
 
-                var message = data.msg;
-                if (isVoiceInput) {
-                    playText(message);
-                    isVoiceInput = false;
-                }
+                if (data.username === username) {
+                    var node = document.createElement('div');
+                    node.className = 'message other-message typing-animation';
+                    document.getElementById('messages').appendChild(node);
+                    
+                    scrollToBottom();
 
-                var index = 0;
-                var interval = setInterval(function() {
-                    if (index < message.length) {
-                        node.textContent += message.charAt(index);
-                        index++;
-                    } else {
-                        clearInterval(interval);
+                    var message = data.msg;
+                    if (isVoiceInput) {
+                        playText(message);
+                        isVoiceInput = false;
                     }
-                }, 25);
 
+                    var index = 0;
+                    var interval = setInterval(function() {
+                        if (index < message.length) {
+                            node.textContent += message.charAt(index);
+                            index++;
+                        } else {
+                            clearInterval(interval);
+                        }
+                    }, 25);
+                }
             });
 
             function scrollToBottom() {
                 var messages = document.getElementById('messages');
                 messages.scrollTop = messages.scrollHeight;
+            }
+
+            function showLoading() {
+                document.getElementById('loading').style.display = 'flex';
+            }
+
+            function hideLoading() {
+                document.getElementById('loading').style.display = 'none';
             }
 
             function playText(text) {
