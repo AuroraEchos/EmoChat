@@ -137,6 +137,7 @@ EmoChat/
 
 - [@sthnull](https://github.com/sthnull) - 感谢你在项目初期阶段的出色规划和架构设计。
 - [@Thor030707](https://github.com/Thor030707) - 你的代码优化和性能提升让我们的项目更加高效
+- [@suanbuningmeng](https://github.com/suanbuningmeng) - 感谢你细心的测试和耐心的Bug修复，让我们的项目更加稳定。
 
 没有你们的支持和努力，这个项目不可能取得现在的成果。谢谢你们！
 
