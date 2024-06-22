@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Chat</title>
+        <link rel="stylesheet" href="/static/css/chat.css">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+        <link rel="preconnect" href="https://fonts.gstatic.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    </head>
+    
+    <body>
+        <div class="container message-display">
+            <div class="message-container" id="messages">
+            </div>
+        </div>
+        <div class="container message-input">
+            <input type="text" id="messageInput">
+            <img src="/static/images/voice.png" class="audio-icon" id="audio-icon">
+        </div>
+        <div class="canvasBox">
+            <canvas id="my-canvas"> </canvas>
+            <img src="/static/images/close.png" class="close-button" id="close-button">
+        </div>
+        <div class="loading" id="loading">
+            <div class="spinner">
+                <div class="bounce1"></div>
+                <div class="bounce2"></div>
+                <div class="bounce3"></div>
+            </div>
+        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+        <script src="{{ url_for('static', filename='js/crypto-js.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/xf-voice-dictation.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/transcode.worker.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/base64.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/crypto-js.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/tts.umd.js') }}"></script>
+        <script>
+            var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+            if (isMobile) {
+                document.querySelector('.container.message-display').style.width = '90%';
+                document.querySelector('.container.message-input').style.width = '80%';
+            }
+
+            if (isMobile) {
+                alert('抱歉，移动端目前只支持文本交互，语音交互功能暂未支持移动端，若想体验语音交互功能，请使用电脑端访问。');
+                setTimeout(function() {
+                    alert.style.display = 'none';
+                }, 3000);
+                //document.getElementById('audio-icon').style.display = 'none';
+
+                document.getElementById('audio-icon').style.pointerEvents = 'none';
+            }
+
+
+            var socket = io();
+            var isVoiceInput = false;
+
+            const username = "{{ username }}";
+
+            document.getElementById('loading').style.display = 'none';
+
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    var message = e.target.value;
+
+                    var node = document.createElement('div');
+                    node.textContent = message;
+                    node.className = 'message my-message';
+                    document.getElementById('messages').appendChild(node);
+
+                    socket.emit('message', {msg: message});
+
+                    e.target.value = '';
+
+                    showLoading();
+                }
+            });
+
+
+            socket.on('response', function(data) {
+                hideLoading();
+
+                if (data.username === username) {
+                    var node = document.createElement('div');
+                    node.className = 'message other-message typing-animation';
+                    document.getElementById('messages').appendChild(node);
+                    
+                    scrollToBottom();
+
+                    var message = data.msg;
+                    if (isVoiceInput) {
+                        playText(message);
+                        isVoiceInput = false;
+                    }
+
+                    var index = 0;
+                    var interval = setInterval(function() {
+                        if (index < message.length) {
+                            node.textContent += message.charAt(index);
+                            index++;
+                        } else {
+                            clearInterval(interval);
+                        }
+                    }, 25);
+                }
+            });
+
+            function scrollToBottom() {
+                var messages = document.getElementById('messages');
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            function showLoading() {
+                document.getElementById('loading').style.display = 'flex';
+            }
+
+            function hideLoading() {
+                document.getElementById('loading').style.display = 'none';
+            }
+
+            function playText(text) {
+                const APPID = "d9535e5e";
+                const API_SECRET = "NTAzOWIzYjZjZmE2MGU2ZTg5MjEwOGE3";
+                const API_KEY = "406b4de4c27c010ee53a5aa89d77095a";
+
+                const audioPlayer = new AudioPlayer("../static/js");
+
+                function getWebSocketUrl(apiKey, apiSecret) {
+                    var url = "wss://tts-api.xfyun.cn/v2/tts";
+                    var host = location.host;
+                    var date = new Date().toGMTString();
+                    var algorithm = "hmac-sha256";
+                    var headers = "host date request-line";
+                    var signatureOrigin = `host: ${host}\ndate: ${date}\nGET /v2/tts HTTP/1.1`;
+                    var signatureSha = CryptoJS.HmacSHA256(signatureOrigin, apiSecret);
+                    var signature = CryptoJS.enc.Base64.stringify(signatureSha);
+                    var authorizationOrigin = `api_key="${apiKey}", algorithm="${algorithm}", headers="${headers}", signature="${signature}"`;
+                    var authorization = btoa(authorizationOrigin);
+                    url = `${url}?authorization=${authorization}&date=${date}&host=${host}`;
+                    return url;
+                }
+
+                function encodeText(text, type) {
+                    if (type === "unicode") {
+                        let buf = new ArrayBuffer(text.length * 4);
+                        let bufView = new Uint16Array(buf);
+                        for (let i = 0, strlen = text.length; i < strlen; i++) {
+                            bufView[i] = text.charCodeAt(i);
+                        }
+                        let binary = "";
+                        let bytes = new Uint8Array(buf);
+                        let len = bytes.byteLength;
+                        for (let i = 0; i < len; i++) {
+                            binary += String.fromCharCode(bytes[i]);
+                        }
+                        return window.btoa(binary);
+                    } else {
+                        return Base64.encode(text);
+                    }
+                }
+
+                let ttsWS;
+
+                function connectWebSocket() {
+                    const url = getWebSocketUrl(API_KEY, API_SECRET);
+                    if ("WebSocket" in window) {
+                        ttsWS = new WebSocket(url);
+                    } else if ("MozWebSocket" in window) {
+                        ttsWS = new MozWebSocket(url);
+                    } else {
+                        alert("浏览器不支持WebSocket");
+                        return;
+                    }
+
+                    ttsWS.onopen = () => {
+                        audioPlayer.start({
+                            autoPlay: true,
+                            sampleRate: 16000,
+                            resumePlayDuration: 1000
+                        });
+
+                        var params = {
+                            common: {
+                                app_id: APPID,
+                            },
+                            business: {
+                                aue: "raw",
+                                auf: "audio/L16;rate=16000",
+                                vcn: "x4_lingxiaoyun_talk_emo",
+                                speed: 60,
+                                volume: 50,
+                                pitch: 50,
+                                bgs: 0,
+                                tte: "UTF8",
+                            },
+                            data: {
+                                status: 2,
+                                text: encodeText(text, "UTF8"),
+                            },
+                        };
+                        ttsWS.send(JSON.stringify(params));
+                    };
+
+                    ttsWS.onmessage = (e) => {
+                        let jsonData = JSON.parse(e.data);
+                        if (jsonData.code !== 0) {
+                            console.error(jsonData);
+                            return;
+                        }
+                        audioPlayer.postMessage({
+                            type: "base64",
+                            data: jsonData.data.audio,
+                            isLastData: jsonData.data.status === 2,
+                        });
+                        if (jsonData.code === 0 && jsonData.data.status === 2) {
+                            ttsWS.close();
+                        }
+                    };
+
+                    ttsWS.onerror = (e) => {
+                        console.error(e);
+                    };
+
+                    ttsWS.onclose = (e) => {
+                        console.log(e);
+                    };
+                }
+
+                connectWebSocket();
+            }
+
+            const configInfo = {
+                width: 600,
+                height: 200,
+                lineWidth: 3,
+                linear1: [0, "rgba(181, 21, 135,1)", 0.5, "rgba(115, 174, 73,1)", 1, "rgba(242, 128, 6,1)"],
+                linear2: [0, "rgba(22, 108, 220, 0.6)", 1, "rgba(255, 42, 42, 0.6)"],
+                linearBg: [0, "rgba(222,222,222,0.3)", 1, "rgba(80,165,222,0.2)"],
+                scale: 2,
+                speed: 8,
+                _phase: 0,
+                dataLength: 1200,
+                sampleRate: 16000
+            };
+
+            const canvas = document.querySelector("#my-canvas");
+            const ctx = canvas.getContext("2d");
+            const scale = configInfo.scale;
+            const width = configInfo.width * scale;
+            const height = configInfo.height * scale;
+            canvas.width = width;
+            canvas.height = height;
+
+            const Box = document.querySelector(".canvasBox");
+            Box.style.width = width / 2 + 'px';
+            Box.style.height = height / 2 + 'px';
+
+            const GenLinear = (ctx, size, colors, top) => {
+                const gradient = ctx.createLinearGradient(0, 0, top ? 0 : size, top ? size : 0);
+                for (let i = 0; i < colors.length;) {
+                    gradient.addColorStop(colors[i++], colors[i++]);
+                }
+                return gradient;
+            };
+
+            const GenPath = (frequency, amplitude, phase) => {
+                const rtv = [];
+                const maxAmplitude = (configInfo.height * scale) / 2;
+                for (let x = 0; x < width; x += scale) {
+                    const scaling = (1 + Math.cos(Math.PI + (x / width) * 2 * Math.PI)) / 2;
+                    const y = scaling * maxAmplitude * amplitude * Math.sin(2 * Math.PI * (x / width) * frequency + phase) + maxAmplitude;
+                    rtv.push(y);
+                }
+                return rtv;
+            };
+
+            const DrawPath = (path, linear) => {
+                ctx.beginPath();
+                for (let i = 0, x = 0; x < width; i++, x += scale) {
+                    if (x == 0) {
+                        ctx.moveTo(x, path[i]);
+                    } else {
+                        ctx.lineTo(x, path[i]);
+                    }
+                }
+                ctx.lineWidth = configInfo.lineWidth * scale;
+                ctx.strokeStyle = linear;
+                ctx.stroke();
+            };
+
+            const CanvasGradient1 = GenLinear(ctx, configInfo.width, configInfo.linear1);
+            const CanvasGradient2 = GenLinear(ctx, configInfo.width, configInfo.linear2);
+            const LinearBg = GenLinear(ctx, configInfo.height, configInfo.linearBg, true);
+
+            const HandleInput = (powerLevel) => {
+                const speedx = (configInfo.speed * configInfo.dataLength) / configInfo.sampleRate;
+                const phase = (configInfo._phase -= speedx);
+                const amplitude = powerLevel / 100;
+                const path1 = GenPath(2, amplitude, phase);
+                const path2 = GenPath(1.8, amplitude, phase + speedx * 5);
+
+                ctx.clearRect(0, 0, width, height);
+
+                ctx.beginPath();
+                for (let i = 0, x = 0; x < width; i++, x += scale) {
+                    if (x == 0) {
+                        ctx.moveTo(x, path1[i]);
+                    } else {
+                        ctx.lineTo(x, path1[i]);
+                    }
+                }
+                for (let x = width - 1; x >= 0; x -= scale) {
+                    ctx.lineTo(x, path2[x / scale]);
+                }
+                ctx.closePath();
+                ctx.fillStyle = LinearBg;
+                ctx.fill();
+
+                DrawPath(path2, CanvasGradient2);
+                DrawPath(path1, CanvasGradient1);
+            };
+
+            const drawWaveAnimation = () => {
+                let PL = 0;
+                let flag = false;
+                let animationId = null;
+
+                const requestAnimFrame = () => {
+                    animationId = window.requestAnimationFrame(() => {
+                        if (PL === 100) flag = false;
+                        if (PL === 0) flag = true;
+                        if (PL % 6 === 0) HandleInput(PL);
+                        requestAnimFrame();
+                        if (flag) PL++;
+                        if (!flag) PL--;
+                    });
+                };
+
+                const clearAnimation = () => {
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                    PL = 0;
+                    HandleInput(PL);
+                };
+
+                return {
+                    requestAnimFrame,
+                    clearAnimation
+                };
+            };
+
+            window.onload = function () {
+                const voiceTxt = document.querySelector('#messageInput');
+                const audioIcon = document.querySelector('#audio-icon');
+                const closeButton = document.querySelector('#close-button');
+                let silentTimer = null;
+                const silentTime = 2500;
+                let isVoiceInputActive = false;
+
+                const { requestAnimFrame, clearAnimation } = drawWaveAnimation();
+
+                const xfVoice = new XfVoiceDictation({
+                    APPID: '488a4587',
+                    APISecret: 'ZTE3MjMyMjAxMThhMjhlNTQ0YmEyOGRk', 
+                    APIKey: 'a5431ee7d66083bab692e79df1aa8f0b',
+
+                    onWillStatusChange: function (oldStatus, newStatus) {
+                        if (newStatus === 'ing') {
+                            document.querySelector('.canvasBox').classList.add('show');
+                            requestAnimFrame();
+                        }
+                    },
+                    onTextChange: function (text) {
+                        if (isVoiceInputActive) {
+                            voiceTxt.value = text;
+                            if (text) {
+                                clearTimeout(silentTimer);
+                                silentTimer = setTimeout(() => {
+                                    if (isPunctuation(text.slice(-1))) {
+                                        sendMessage();
+                                        clearInputAndState();
+                                        isVoiceInputActive = true;
+                                    }
+                                }, silentTime);
+                            }
+                        }
+                    },
+                });
+
+                audioIcon.onclick = function () {
+                    xfVoice.start();
+                    isVoiceInput = true;
+                };
+
+                closeButton.onclick = function () {
+                    xfVoice.stop();
+                    clearInputAndState();
+                };
+
+                function isPunctuation(char) {
+                    const punctuationMarks = '。，、？！；：“”‘’（）《》〈〉【】〔〕…—～';
+                    return punctuationMarks.includes(char);
+                }
+
+                function sendMessage() {
+                    const event = new KeyboardEvent('keypress', {
+                        key: 'Enter',
+                        code: 'Enter',
+                        keyCode: 13,
+                        which: 13,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    voiceTxt.dispatchEvent(event);
+                }
+
+                function clearInputAndState() {
+                    isVoiceInputActive = false;
+                    voiceTxt.value = '';
+                    clearAnimation();
+                    document.querySelector('.canvasBox').classList.remove('show');
+                    clearTimeout(silentTimer);
+                }
+            };
+        </script>
+    </body>
+</html>

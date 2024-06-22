@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="/static/css/index.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+</head>
+<body onload="document.querySelector('.fade-in').classList.add('loaded')">
+    <img src="/static/images/logo.png" alt="logo" class="fade-in">
+    <form method="post" action="/chat">
+        <input type="text" name="username" placeholder="用户名">
+        <button type="submit">登录</button>
+    </form>
+    <script>
+        var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        if (isMobile) {
+            document.querySelector('img').style.width = '80%';
+            document.querySelector('img').style.height = 'auto';
+        }
+    </script>
+</body>
+
+</html>
