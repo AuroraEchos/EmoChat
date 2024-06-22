@@ -377,7 +377,7 @@
                         }
                     },
                     onTextChange: function (text) {
-                        if (isVoiceInputActive) {
+                        if (isVoiceInput) {
                             voiceTxt.value = text;
                             if (text) {
                                 clearTimeout(silentTimer);
